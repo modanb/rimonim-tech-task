@@ -2,26 +2,35 @@ param()
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
+Start-Transcript -Path (Join-Path $root 'run-all.log') -Force
 
 function Start-ContainerIfNeeded {
     param(
         [string]$Name,
         [string]$Image,
-        [string]$Arguments
+        [string[]]$Arguments
     )
 
     $existing = & docker ps -aq -f "name=$Name" 2>$null
     if ($null -ne $existing) {
         $running = & docker ps -q -f "name=$Name" 2>$null
         if ($null -eq $running) {
-            Write-Host "Starting existing container $Name..."
-            & docker start $Name | Out-Null
+            $status = (& docker inspect -f '{{.State.Status}}' $Name 2>$null).Trim()
+            if ($status -in @('exited','created','dead')) {
+                Write-Host "Removing stale container $Name and recreating..."
+                & docker rm $Name | Out-Null
+                Write-Host "Creating and starting container $Name..."
+                & docker run -d --name $Name @($Arguments) $Image | Out-Null
+            } else {
+                Write-Host "Starting existing container $Name..."
+                & docker start $Name | Out-Null
+            }
         } else {
             Write-Host "Container $Name already running."
         }
     } else {
         Write-Host "Creating and starting container $Name..."
-        & docker run -d --name $Name $Arguments $Image | Out-Null
+        & docker run -d --name $Name @($Arguments) $Image | Out-Null
     }
 }
 
@@ -41,16 +50,22 @@ if (Test-Port $apiPort) {
 $apiUrl = "http://127.0.0.1:$apiPort"
 
 Write-Host "Ensuring local Docker dependencies..."
-Start-ContainerIfNeeded -Name "metersystem-rabbitmq" -Image "rabbitmq:3-management" -Arguments "-p 5672:5672 -p 15672:15672"
-Start-ContainerIfNeeded -Name "metersystem-postgres" -Image "postgres:18" -Arguments "-e POSTGRES_PASSWORD=postgres -p 5432:5432"
+Start-ContainerIfNeeded -Name "metersystem-rabbitmq" -Image "rabbitmq:3-management" -Arguments @('-p','5672:5672','-p','15672:15672')
+Start-ContainerIfNeeded -Name "metersystem-postgres" -Image "postgres:18" -Arguments @('-e','POSTGRES_PASSWORD=postgres','-p','5432:5432')
 
 Write-Host "Waiting for Postgres container readiness..."
 for ($i = 0; $i -lt 30; $i++) {
     & docker exec metersystem-postgres pg_isready -U postgres 2>$null
     if ($LASTEXITCODE -eq 0) {
+        Write-Host "Postgres is ready."
         break
     }
     Start-Sleep -Seconds 2
+}
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Postgres did not become ready in time."
+    Stop-Transcript
+    exit 1
 }
 
 Write-Host "Creating database and applying schema..."
@@ -127,3 +142,4 @@ Write-Host "Querying Postgres for latest readings..."
 & docker exec -i metersystem-postgres psql -U postgres -d meters -c "SELECT meter_id, value_at, value, received_at_utc FROM meter_readings ORDER BY received_at_utc DESC LIMIT 5;"
 
 Write-Host "Run complete. API: $apiUrl"
+Stop-Transcript
