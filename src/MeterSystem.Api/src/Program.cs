@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.IO;
 using MeterSystem.Api.Models;
 using MeterSystem.Api.Services;
 using MeterSystem.Shared.Models;
@@ -48,6 +49,13 @@ app.MapPost("/api/readings/raw", async (RawMeterReadingsRequest request, IRabbit
     {
         return Results.BadRequest(new { error = ex.Message });
     }
+});
+
+app.MapPost("/debug/echo", async (HttpRequest req) =>
+{
+    using var sr = new StreamReader(req.Body);
+    var body = await sr.ReadToEndAsync();
+    return Results.Text(body, "application/json");
 });
 
 if (app.Environment.IsDevelopment())
