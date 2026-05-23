@@ -16,4 +16,32 @@ spec:
         - name: metersystem-worker
           image: metersystem-worker:latest
           imagePullPolicy: Never
+          env:
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_USERNAME
+              value: "guest"
+            - name: RABBITMQ_PASSWORD
+              value: "guest"
+            - name: RABBITMQ_QUEUE
+              value: "meter_readings"
+            - name: POSTGRES_HOST
+              value: "postgres"
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DB
+              value: "meters"
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name: POSTGRES_PASSWORD
+              value: "postgres"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
 

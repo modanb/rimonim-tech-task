@@ -16,4 +16,40 @@ spec:
         - name: metersystem-api
           image: metersystem-api:latest
           imagePullPolicy: Never
+          ports:
+            - containerPort: 80
+          env:
+            - name: ASPNETCORE_URLS
+              value: "http://+:80"
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_USERNAME
+              value: "guest"
+            - name: RABBITMQ_PASSWORD
+              value: "guest"
+            - name: RABBITMQ_QUEUE
+              value: "meter_readings"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: metersystem-api
+spec:
+  selector:
+    app: metersystem-api
+  type: NodePort
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      nodePort: 30080
 
