@@ -114,10 +114,15 @@ $req.ContentLength = $bytes.Length
 $stream = $req.GetRequestStream()
 $stream.Write($bytes, 0, $bytes.Length)
 $stream.Close()
+
 try {
     $res = $req.GetResponse()
     $httpRes = $res -as [System.Net.HttpWebResponse]
-    $status = if ($httpRes -ne $null) { $httpRes.StatusCode.value__ } else { 'unknown' }
+    if ($null -ne $httpRes) {
+        $status = $httpRes.StatusCode.value__
+    } else {
+        $status = 'unknown'
+    }
     $reader = New-Object System.IO.StreamReader($res.GetResponseStream())
     $body = $reader.ReadToEnd()
     Write-Host "API response status: $status"
@@ -125,7 +130,11 @@ try {
 } catch [System.Net.WebException] {
     if ($null -ne $_.Response) {
         $httpRes = $_.Response -as [System.Net.HttpWebResponse]
-        $status = if ($httpRes -ne $null) { $httpRes.StatusCode.value__ } else { 'unknown' }
+        if ($null -ne $httpRes) {
+            $status = $httpRes.StatusCode.value__
+        } else {
+            $status = 'unknown'
+        }
         $reader = New-Object System.IO.StreamReader($_.Response.GetResponseStream())
         Write-Host "API error status: $status"
         Write-Host "API error body: $($reader.ReadToEnd())"
