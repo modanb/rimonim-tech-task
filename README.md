@@ -60,6 +60,14 @@ Then check:
 curl.exe http://127.0.0.1:8081/health
 ```
 
+### Full local run
+
+A ready-to-use PowerShell script is available to start dependencies, build the solution, run the API and worker, send a test reading, and verify persistence.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run-all.ps1
+```
+
 ### API endpoints
 
 - `POST /api/readings`
