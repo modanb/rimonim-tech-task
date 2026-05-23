@@ -3,25 +3,31 @@ param()
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
 
-function Ensure-Container($name, $image, $args) {
-    $existing = & docker ps -aq -f "name=$name" 2>$null
-    if ($existing) {
-        $running = & docker ps -q -f "name=$name" 2>$null
-        if (-not $running) {
-            Write-Host "Starting existing container $name..."
-            & docker start $name | Out-Null
+function Start-ContainerIfNeeded {
+    param(
+        [string]$Name,
+        [string]$Image,
+        [string]$Arguments
+    )
+
+    $existing = & docker ps -aq -f "name=$Name" 2>$null
+    if ($null -ne $existing) {
+        $running = & docker ps -q -f "name=$Name" 2>$null
+        if ($null -eq $running) {
+            Write-Host "Starting existing container $Name..."
+            & docker start $Name | Out-Null
         } else {
-            Write-Host "Container $name already running."
+            Write-Host "Container $Name already running."
         }
     } else {
-        Write-Host "Creating and starting container $name..."
-        & docker run -d --name $name $args $image | Out-Null
+        Write-Host "Creating and starting container $Name..."
+        & docker run -d --name $Name $Arguments $Image | Out-Null
     }
 }
 
 function Test-Port($port) {
     $listener = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue
-    return $listener -ne $null
+    return $null -ne $listener
 }
 
 Write-Host "Stopping existing API/Worker processes..."
@@ -35,13 +41,15 @@ if (Test-Port $apiPort) {
 $apiUrl = "http://127.0.0.1:$apiPort"
 
 Write-Host "Ensuring local Docker dependencies..."
-Ensure-Container -name "metersystem-rabbitmq" -image "rabbitmq:3-management" -args "-p 5672:5672 -p 15672:15672"
-Ensure-Container -name "metersystem-postgres" -image "postgres:18" -args "-e POSTGRES_PASSWORD=postgres -p 5432:5432"
+Start-ContainerIfNeeded -Name "metersystem-rabbitmq" -Image "rabbitmq:3-management" -Arguments "-p 5672:5672 -p 15672:15672"
+Start-ContainerIfNeeded -Name "metersystem-postgres" -Image "postgres:18" -Arguments "-e POSTGRES_PASSWORD=postgres -p 5432:5432"
 
 Write-Host "Waiting for Postgres container readiness..."
-for ($i=0; $i -lt 30; $i++) {
-    $ready = & docker exec metersystem-postgres pg_isready -U postgres 2>$null
-    if ($LASTEXITCODE -eq 0) { break }
+for ($i = 0; $i -lt 30; $i++) {
+    & docker exec metersystem-postgres pg_isready -U postgres 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        break
+    }
     Start-Sleep -Seconds 2
 }
 
@@ -56,10 +64,10 @@ Write-Host "Building solution..."
 & dotnet build MeterSystem.slnx -c Release | Out-Null
 
 Write-Host "Starting API on $apiUrl..."
-$apiProcess = Start-Process -FilePath dotnet -ArgumentList "run --project src/MeterSystem.Api/MeterSystem.Api.csproj --urls=$apiUrl" -WorkingDirectory $root -NoNewWindow -PassThru
+Start-Process -FilePath dotnet -ArgumentList "run --project src/MeterSystem.Api/MeterSystem.Api.csproj --urls=$apiUrl" -WorkingDirectory $root -NoNewWindow | Out-Null
 
 Write-Host "Starting Worker..."
-$workerProcess = Start-Process -FilePath dotnet -ArgumentList "run --project src/MeterSystem.Worker/MeterSystem.Worker.csproj" -WorkingDirectory $root -NoNewWindow -PassThru
+Start-Process -FilePath dotnet -ArgumentList "run --project src/MeterSystem.Worker/MeterSystem.Worker.csproj" -WorkingDirectory $root -NoNewWindow | Out-Null
 
 Write-Host "Waiting for API health..."
 $healthy = $false
@@ -100,7 +108,7 @@ try {
     Write-Host "API response status: $status"
     if ($body) { Write-Host "API response body: $body" }
 } catch [System.Net.WebException] {
-    if ($_.Response -ne $null) {
+    if ($null -ne $_.Response) {
         $httpRes = $_.Response -as [System.Net.HttpWebResponse]
         $status = if ($httpRes -ne $null) { $httpRes.StatusCode.value__ } else { 'unknown' }
         $reader = New-Object System.IO.StreamReader($_.Response.GetResponseStream())

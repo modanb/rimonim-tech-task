@@ -10,15 +10,15 @@ $stream.Close()
 try {
     $res = $req.GetResponse()
     $httpRes = $res -as [System.Net.HttpWebResponse]
-    $status = if ($httpRes -ne $null) { $httpRes.StatusCode.value__ } else { 'unknown' }
+    $status = if ($null -ne $httpRes) { $httpRes.StatusCode.value__ } else { 'unknown' }
     $sr = New-Object System.IO.StreamReader($res.GetResponseStream())
     $bodyResponse = $sr.ReadToEnd()
     Write-Output "STATUS: $status"
     if ($bodyResponse) { Write-Output "BODY: $bodyResponse" }
 } catch [System.Net.WebException] {
-    if ($_.Response -ne $null) {
+    if ($null -ne $_.Response) {
         $httpRes = $_.Response -as [System.Net.HttpWebResponse]
-        $status = if ($httpRes -ne $null) { $httpRes.StatusCode.value__ } else { 'unknown' }
+        $status = if ($null -ne $httpRes) { $httpRes.StatusCode.value__ } else { 'unknown' }
         $sr = New-Object System.IO.StreamReader($_.Response.GetResponseStream())
         Write-Output "ERROR STATUS: $status"
         Write-Output ('ERROR BODY: ' + $sr.ReadToEnd())
